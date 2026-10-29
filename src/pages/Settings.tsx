@@ -33,7 +33,7 @@ export default function SettingsPage(props: {
       (name) => name && update({ wallpaper: name }),
       (e) => setError(String(e)),
     );
-  const slider = (key: "wallpaperBlur" | "wallpaperDim", max: number, unit: string) => (
+  const slider = (key: "wallpaperBlur" | "wallpaperTransparency", max: number, unit: string) => (
     <div className="slider">
       <input
         type="range"
@@ -136,8 +136,8 @@ export default function SettingsPage(props: {
                 {slider("wallpaperBlur", 40, "")}
               </div>
               <div className="srow">
-                <div className="sl">{t("settings.dim")}</div>
-                {slider("wallpaperDim", 80, "%")}
+                <div className="sl">{t("settings.transparency")}</div>
+                {slider("wallpaperTransparency", 90, "%")}
               </div>
             </>
           )}
