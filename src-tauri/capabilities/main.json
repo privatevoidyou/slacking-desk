@@ -9,6 +9,20 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-internal-toggle-maximize",
     "core:window:allow-hide",
-    "core:window:allow-start-dragging"
+    "core:window:allow-start-dragging",
+    "allow-app-info",
+    "allow-open-data-dir",
+    "allow-get-settings",
+    "allow-save-settings",
+    "allow-plugins-list",
+    "allow-plugin-pick-folder",
+    "allow-plugin-add",
+    "allow-plugin-set-enabled",
+    "allow-plugin-reload",
+    "allow-plugin-restart",
+    "allow-plugin-remove",
+    "allow-plugin-open",
+    "allow-plugin-open-log",
+    "allow-plugin-devtools"
   ]
 }
