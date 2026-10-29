@@ -18,7 +18,7 @@ export interface Settings {
   wallpaper: string | null;
   wallpaperFit: "cover" | "contain";
   wallpaperBlur: number;
-  wallpaperDim: number;
+  wallpaperTransparency: number;
   homeSort: "fixed" | "recent";
   autostart: boolean;
 }
@@ -148,6 +148,7 @@ export const homeAddUrl = (name: string, url: string) => invoke<void>("home_add_
 export const homeAddPaths = (paths: string[]) => invoke<void>("home_add_paths", { paths });
 export const homePickFiles = () => invoke<void>("home_pick_files");
 export const homeAddPlugin = (id: string) => invoke<void>("home_add_plugin", { id });
+export const homeRefetchIcon = (id: string) => invoke<void>("home_refetch_icon", { id });
 export const homeUpdate = (edit: HomeEdit) => invoke<void>("home_update", { edit });
 export const homeRemove = (id: string) => invoke<void>("home_remove", { id });
 export const homeReorder = (ids: string[]) => invoke<void>("home_reorder", { ids });

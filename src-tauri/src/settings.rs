@@ -18,8 +18,8 @@ pub struct Settings {
     pub wallpaper_fit: String,
     /// 模糊 0–40（像素）
     pub wallpaper_blur: u32,
-    /// 变暗 0–80（百分比）
-    pub wallpaper_dim: u32,
+    /// 壁纸透明度 0–90（百分比），越大壁纸越淡、越接近纯色底
+    pub wallpaper_transparency: u32,
     /// 首页排序："fixed" 或 "recent"
     pub home_sort: String,
     /// 开机自启。真实状态以系统为准，启动时会用系统里的状态覆盖。
@@ -35,7 +35,7 @@ impl Default for Settings {
             wallpaper: None,
             wallpaper_fit: "cover".into(),
             wallpaper_blur: 0,
-            wallpaper_dim: 10,
+            wallpaper_transparency: 0,
             home_sort: "fixed".into(),
             autostart: false,
         }

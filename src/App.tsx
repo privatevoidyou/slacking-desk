@@ -64,11 +64,12 @@ export default function App() {
               backgroundImage: `url("${appfileUrl(info.platform, `wallpaper/${settings.wallpaper}`)}")`,
               backgroundSize: settings.wallpaperFit,
               filter: blur ? `blur(${blur}px)` : undefined,
+              // 透明度：透出下面的纯色底
+              opacity: 1 - settings.wallpaperTransparency / 100,
               // 模糊后边缘会透出底色，稍微放大盖住
               transform: blur ? `scale(${1 + blur / 200})` : undefined,
             }}
           />
-          <div className="wallpaper-dim" style={{ background: `rgba(0,0,0,${settings.wallpaperDim / 100})` }} />
         </>
       )}
       <div className="win">

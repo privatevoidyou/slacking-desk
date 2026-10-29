@@ -35,6 +35,13 @@ export function TileIcon({ item, name, plugin, preview }: { item: HomeItem; name
   }
   if (icon.kind === "letter") return <LetterIcon name={name} color={icon.color} />;
   if (item.type === "plugin" && plugin) return <PluginIcon url={plugin.iconUrl} name={name} size="l" />;
+  if (item.autoIconUrl && item.type === "url") {
+    return (
+      <div className="ico l img site">
+        <img src={item.autoIconUrl} alt="" draggable={false} />
+      </div>
+    );
+  }
   if (item.autoIconUrl) {
     return (
       <div className="ico l img plain">
@@ -146,6 +153,12 @@ export function EditDialog(props: { item: HomeItem; name: string; plugin?: Plugi
   const set = (patch: Partial<HomeEdit>) => setEdit((e) => ({ ...e, ...patch }));
   const setIcon = (patch: Partial<HomeIcon>) => setEdit((e) => ({ ...e, icon: { ...e.icon, ...patch } }));
   const fail = (e: unknown) => setError(String(e));
+  const [fetching, setFetching] = useState(false);
+  const refetch = () => {
+    setFetching(true);
+    setError("");
+    api.homeRefetchIcon(item.id).then(() => setIcon({ kind: "auto" }), fail).finally(() => setFetching(false));
+  };
 
   const pickImage = () =>
     api.homePickImage().then((r) => {
@@ -206,6 +219,11 @@ export function EditDialog(props: { item: HomeItem; name: string; plugin?: Plugi
               {edit.icon.kind === "image" && (
                 <button type="button" className="link" onClick={pickImage}>
                   {t("home.changeImage")}
+                </button>
+              )}
+              {edit.icon.kind === "auto" && item.type === "url" && edit.target === item.target && (
+                <button type="button" className="link" onClick={refetch} disabled={fetching}>
+                  {t(fetching ? "home.fetchingIcon" : "home.refetchIcon")}
                 </button>
               )}
             </div>
