@@ -8,11 +8,19 @@ export interface AppInfo {
   version: string;
   platform: Platform;
   dataDir: string;
+  glassSupported: boolean;
 }
 
 export interface Settings {
   language: Language;
   theme: Theme;
+  uiStyle: "standard" | "glass";
+  wallpaper: string | null;
+  wallpaperFit: "cover" | "contain";
+  wallpaperBlur: number;
+  wallpaperTransparency: number;
+  homeSort: "fixed" | "recent";
+  autostart: boolean;
 }
 
 export const appInfo = () => invoke<AppInfo>("app_info");
@@ -90,3 +98,63 @@ export function pluginDesc(m: Manifest | null, lang: Language) {
   if (!m) return "";
   return (lang === "en" && m.i18n?.en?.description) || m.description;
 }
+
+// ---------- 壁纸 / 数据目录里的文件 ----------
+
+export const wallpaperPick = () => invoke<string | null>("wallpaper_pick");
+
+/** 主窗口读取数据目录文件（图标、壁纸）的地址，和 Rust 的 home::appfile_url 一致 */
+export function appfileUrl(platform: Platform, rel: string) {
+  return platform === "windows" ? `http://appfile.localhost/${rel}` : `appfile://localhost/${rel}`;
+}
+
+// ---------- 首页 ----------
+
+export interface HomeIcon {
+  kind: "auto" | "letter" | "image";
+  color?: string | null;
+  file?: string | null;
+}
+
+export interface HomeItem {
+  id: string;
+  type: "plugin" | "url" | "file";
+  name: string;
+  target: string;
+  args: string;
+  icon: HomeIcon;
+  autoIcon: string | null;
+  hideConsole: boolean;
+  runAsAdmin: boolean;
+  lastUsed: number;
+  order: number;
+  autoIconUrl: string | null;
+  imageUrl: string | null;
+  missing: boolean;
+}
+
+export interface HomeEdit {
+  id: string;
+  name: string;
+  target: string;
+  args: string;
+  icon: HomeIcon;
+  hideConsole: boolean;
+  runAsAdmin: boolean;
+}
+
+export const homeList = () => invoke<HomeItem[]>("home_list");
+export const homeAddUrl = (name: string, url: string) => invoke<void>("home_add_url", { name, url });
+export const homeAddPaths = (paths: string[]) => invoke<void>("home_add_paths", { paths });
+export const homePickFiles = () => invoke<void>("home_pick_files");
+export const homeAddPlugin = (id: string) => invoke<void>("home_add_plugin", { id });
+export const homeRefetchIcon = (id: string) => invoke<void>("home_refetch_icon", { id });
+export const homeUpdate = (edit: HomeEdit) => invoke<void>("home_update", { edit });
+export const homeRemove = (id: string) => invoke<void>("home_remove", { id });
+export const homeReorder = (ids: string[]) => invoke<void>("home_reorder", { ids });
+export const homeLaunch = (id: string) => invoke<void>("home_launch", { id });
+export const homePickTarget = () => invoke<string | null>("home_pick_target");
+export const homePickImage = () => invoke<{ file: string; url: string } | null>("home_pick_image");
+
+/** bat / cmd / ps1 才有"隐藏控制台" */
+export const isConsoleScript = (path: string) => /\.(bat|cmd|ps1)$/i.test(path);

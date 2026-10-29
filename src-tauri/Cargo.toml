@@ -1,6 +1,6 @@
 [package]
 name = "slacking-desk"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "Slacking Desk / 摸鱼工作台 — plugin-first desktop shell"
@@ -10,17 +10,25 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # devtools：插件开发者需要在正式版里打开插件窗口的开发者工具
-tauri = { version = "2", features = ["tray-icon", "devtools"] }
+tauri = { version = "2", features = ["tray-icon", "devtools", "macos-private-api"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }
+# 首页网址图标：去网站取它自己的图标。用系统 TLS（Windows schannel、macOS Security、Linux OpenSSL）
+ureq = { version = "2", default-features = false, features = ["native-tls", "gzip"] }
+native-tls = "0.2"
+url = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+# 首页：ShellExecuteEx 启动程序、提取程序图标；判断是不是 Win11
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Com", "Win32_Graphics_Gdi", "Win32_System_SystemInformation", "Wdk_System_SystemServices"] }
+png = "0.17"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

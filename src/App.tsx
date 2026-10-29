@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { appInfo, getSettings, pluginsList, saveSettings, type AppInfo, type PluginView, type Settings } from "./api";
+import { appfileUrl, appInfo, getSettings, pluginsList, saveSettings, type AppInfo, type PluginView, type Settings } from "./api";
 import { LangContext } from "./i18n";
 import TitleBar from "./components/TitleBar";
 import Sidebar, { type Page } from "./components/Sidebar";
@@ -37,9 +37,13 @@ export default function App() {
     return () => void off.then((f) => f());
   }, []);
 
+  // 界面风格：wp = 有壁纸；fx = 毛玻璃且没壁纸，用系统透明效果（不支持时就是普通纯色）
+  const glass = settings?.uiStyle === "glass";
+  const wp = !!settings?.wallpaper;
+  const fx = glass && !wp && !!info?.glassSupported;
   useEffect(() => {
-    document.documentElement.className = `${theme} ${info?.platform ?? ""}`;
-  }, [theme, info]);
+    document.documentElement.className = [theme, info?.platform ?? "", glass ? "glass" : "", wp ? "wp" : "", fx ? "fx" : ""].join(" ");
+  }, [theme, info, glass, wp, fx]);
 
   if (!info || !settings) return null;
 
@@ -48,16 +52,34 @@ export default function App() {
     setSettings(next);
   };
 
+  const blur = settings.wallpaperBlur;
+
   return (
     <LangContext.Provider value={settings.language}>
+      {settings.wallpaper && (
+        <>
+          <div
+            className="wallpaper"
+            style={{
+              backgroundImage: `url("${appfileUrl(info.platform, `wallpaper/${settings.wallpaper}`)}")`,
+              backgroundSize: settings.wallpaperFit,
+              filter: blur ? `blur(${blur}px)` : undefined,
+              // 透明度：透出下面的纯色底
+              opacity: 1 - settings.wallpaperTransparency / 100,
+              // 模糊后边缘会透出底色，稍微放大盖住
+              transform: blur ? `scale(${1 + blur / 200})` : undefined,
+            }}
+          />
+        </>
+      )}
       <div className="win">
-        <Sidebar page={page} onChange={setPage} platform={info.platform} />
+        <Sidebar page={page} onChange={setPage} platform={info.platform} version={info.version} />
         <div className="main">
           <TitleBar platform={info.platform} />
           <section className="content">
-            {page === "home" && <Home plugins={plugins} onGoPlugins={() => setPage("plugins")} />}
+            {page === "home" && <Home plugins={plugins} platform={info.platform} settings={settings} onSettings={updateSettings} />}
             {page === "plugins" && <Plugins plugins={plugins} />}
-            {page === "settings" && <SettingsPage info={info} settings={settings} onChange={updateSettings} />}
+            {page === "settings" && <SettingsPage info={info} settings={settings} onChange={updateSettings} onPreview={setSettings} />}
           </section>
         </div>
       </div>

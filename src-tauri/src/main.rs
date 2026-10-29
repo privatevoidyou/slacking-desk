@@ -2,13 +2,16 @@
 
 mod api;
 mod backend;
+mod home;
 mod manifest;
 mod platform;
 mod plugins;
 mod settings;
+mod siteicon;
 
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use settings::Settings;
 use tauri::{
@@ -20,6 +23,58 @@ use tauri::{
 pub struct AppState {
     pub settings: Mutex<Settings>,
     tray: TrayIcon,
+}
+
+static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// 数据目录（插件、插件数据、设置、首页、壁纸、日志都在这里）
+pub fn data_dir() -> &'static Path {
+    DATA_DIR.get().expect("数据目录在启动时就设置好了")
+}
+
+/// Windows：放在安装目录下的 data\（装在 Program Files 之类写不进去的地方时返回 None，用 %LOCALAPPDATA%）。
+/// 0.2.0 及以前的数据在 %LOCALAPPDATA%\<identifier>，第一次启动时搬过来。
+#[cfg(windows)]
+fn windows_data_dir() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.join("data");
+    std::fs::create_dir_all(&dir).ok()?;
+    let probe = dir.join(".write-test");
+    std::fs::write(&probe, b"").ok()?;
+    let _ = std::fs::remove_file(&probe);
+    if let Some(old) = std::env::var_os("LOCALAPPDATA").map(|p| PathBuf::from(p).join("com.privatevoidyou.slackingdesk")) {
+        if old.join("settings.json").exists() && !dir.join("settings.json").exists() {
+            match copy_dir(&old, &dir) {
+                // settings.json 最后复制：中途失败的话下次启动会重新搬
+                Ok(()) => match std::fs::copy(old.join("settings.json"), dir.join("settings.json")) {
+                    Ok(_) => {
+                        let _ = std::fs::remove_dir_all(&old);
+                    }
+                    Err(e) => eprintln!("搬数据目录失败：{e}"),
+                },
+                Err(e) => eprintln!("搬数据目录失败：{e}"),
+            }
+        }
+    }
+    Some(dir)
+}
+
+/// 复制整个目录（跳过 settings.json 和 WebView 缓存 EBWebView）
+#[cfg(windows)]
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for e in std::fs::read_dir(from)? {
+        let e = e?;
+        let name = e.file_name();
+        if name == "settings.json" || name == "EBWebView" {
+            continue;
+        }
+        if e.file_type()?.is_dir() {
+            copy_dir(&e.path(), &to.join(&name))?;
+        } else {
+            std::fs::copy(e.path(), to.join(&name))?;
+        }
+    }
+    Ok(())
 }
 
 static LANG_EN: AtomicBool = AtomicBool::new(false);
@@ -55,18 +110,25 @@ struct AppInfo {
     version: String,
     platform: &'static str,
     data_dir: String,
+    /// 系统透明效果能不能用（Win11 / macOS）
+    glass_supported: bool,
 }
 
 #[tauri::command]
 fn app_info(app: AppHandle) -> Result<AppInfo, String> {
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    Ok(AppInfo { version: app.package_info().version.to_string(), platform: platform_name(), data_dir: dir.display().to_string() })
+    let dir = data_dir();
+    Ok(AppInfo {
+        version: app.package_info().version.to_string(),
+        platform: platform_name(),
+        data_dir: dir.display().to_string(),
+        glass_supported: platform::glass_supported(),
+    })
 }
 
 #[tauri::command]
 fn open_data_dir(app: AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let dir = data_dir();
     app.opener().open_path(dir.display().to_string(), None::<&str>).map_err(|e| e.to_string())
 }
 
@@ -77,14 +139,102 @@ fn get_settings(state: tauri::State<AppState>) -> Settings {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, state: tauri::State<AppState>, settings: Settings) -> Result<(), String> {
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let dir = data_dir();
+    let old_autostart = state.settings.lock().unwrap().autostart;
+    if settings.autostart != old_autostart {
+        use tauri_plugin_autostart::ManagerExt;
+        let al = app.autolaunch();
+        let r = if settings.autostart { al.enable() } else { al.disable() };
+        r.map_err(|e| tr(&format!("设置开机自启失败：{e}"), &format!("Failed to change start-up setting: {e}")))?;
+    }
     settings.save(&dir).map_err(|e| tr(&format!("保存设置失败：{e}"), &format!("Failed to save settings: {e}")))?;
     LANG_EN.store(settings.language == "en", Ordering::Relaxed);
     let menu = tray_menu(&app, &settings.language).map_err(|e| e.to_string())?;
     state.tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
     plugins::broadcast_theme(&app, &settings.theme);
+    apply_window_style(&app, &settings);
+    clean_wallpapers(&dir, settings.wallpaper.as_deref());
     *state.settings.lock().unwrap() = settings;
     Ok(())
+}
+
+/// 主窗口的系统主题和透明效果。毛玻璃 + 没有壁纸 + 系统支持时才打开 Mica / vibrancy。
+fn apply_window_style(app: &AppHandle, s: &Settings) {
+    let Some(w) = app.get_webview_window("main") else { return };
+    let _ = w.set_theme(match s.theme.as_str() {
+        "dark" => Some(tauri::Theme::Dark),
+        "light" => Some(tauri::Theme::Light),
+        _ => None,
+    });
+    if s.ui_style == "glass" && s.wallpaper.is_none() && platform::glass_supported() {
+        use tauri::window::{Effect, EffectState, EffectsBuilder};
+        let effect = if cfg!(target_os = "macos") { Effect::UnderWindowBackground } else { Effect::Mica };
+        let _ = w.set_effects(EffectsBuilder::new().effect(effect).state(EffectState::FollowsWindowActiveState).build());
+    } else {
+        let _ = w.set_effects(None);
+    }
+}
+
+/// 删除 wallpaper/ 里不再使用的旧壁纸
+fn clean_wallpapers(dir: &std::path::Path, keep: Option<&str>) {
+    let Ok(rd) = std::fs::read_dir(dir.join("wallpaper")) else { return };
+    for e in rd.flatten() {
+        if Some(e.file_name().to_string_lossy().as_ref()) != keep {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+const MAX_WALLPAPER: u64 = 30 * 1024 * 1024;
+
+/// 选择壁纸图片，复制到数据目录的 wallpaper/，返回文件名（设置保存后才生效）
+#[tauri::command]
+async fn wallpaper_pick(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let Some(picked) = app.dialog().file().add_filter(tr("图片", "Images"), &["jpg", "jpeg", "png", "webp"]).blocking_pick_file() else {
+        return Ok(None);
+    };
+    let src = picked.into_path().map_err(|e| e.to_string())?;
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if !matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
+        return Err(tr("只支持 jpg、png、webp 图片", "Only jpg, png and webp images are supported"));
+    }
+    if std::fs::metadata(&src).map_err(|e| e.to_string())?.len() > MAX_WALLPAPER {
+        return Err(tr("图片太大了（最大 30 MB）", "Image is too large (max 30 MB)"));
+    }
+    let dir = data_dir().join("wallpaper");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let name = format!("wallpaper-{ms}.{ext}");
+    std::fs::copy(&src, dir.join(&name)).map_err(|e| tr(&format!("复制图片失败：{e}"), &format!("Failed to copy image: {e}")))?;
+    Ok(Some(name))
+}
+
+/// appfile:// 协议：只给主窗口读数据目录里的 icons/ 和 wallpaper/
+fn serve_appfile(caller: &str, req: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<std::borrow::Cow<'static, [u8]>> {
+    let resp = |status: u16, mime: &str, body: Vec<u8>| {
+        tauri::http::Response::builder().status(status).header("Content-Type", mime).body(std::borrow::Cow::Owned(body)).unwrap()
+    };
+    let path = req.uri().path().trim_start_matches('/').to_string();
+    let (sub, name) = path.split_once('/').unwrap_or(("", ""));
+    let safe = caller == "main" && matches!(sub, "icons" | "wallpaper") && !name.is_empty() && !name.contains(['/', '\\']) && !name.contains("..");
+    if !safe {
+        return resp(403, "text/plain", b"forbidden".to_vec());
+    }
+    let dir = data_dir();
+    let mime = match name.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "gif" => "image/gif",
+        _ => "application/octet-stream",
+    };
+    match std::fs::read(dir.join(sub).join(name)) {
+        Ok(bytes) => resp(200, mime, bytes),
+        Err(_) => resp(404, "text/plain", b"not found".to_vec()),
+    }
 }
 
 fn show_main(app: &AppHandle) {
@@ -110,20 +260,39 @@ fn tray_menu(app: &AppHandle, lang: &str) -> tauri::Result<Menu<Wry>> {
 }
 
 fn main() {
+    #[cfg(windows)]
+    if let Some(dir) = windows_data_dir() {
+        // WebView2 的缓存也放进去（这个环境变量优先于 Tauri 默认的位置），必须在创建窗口之前设置
+        std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", dir.join("EBWebView"));
+        let _ = DATA_DIR.set(dir);
+    }
     let app = tauri::Builder::default()
         // 必须最先注册：第二次启动时只唤起已有窗口
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| show_main(app)))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // 开机自启时带 --autostart，启动后只留在托盘
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
         .register_uri_scheme_protocol("plugin", |ctx, req| plugins::serve(ctx.app_handle(), ctx.webview_label(), &req))
+        .register_uri_scheme_protocol("appfile", |ctx, req| serve_appfile(ctx.webview_label(), &req))
         .setup(|app| {
             let handle = app.handle().clone();
-            let dir = handle.path().app_local_data_dir()?;
-            for sub in ["plugins", "plugin-data", "logs/plugins", "cache"] {
+            if DATA_DIR.get().is_none() {
+                let _ = DATA_DIR.set(handle.path().app_local_data_dir()?);
+            }
+            let dir = data_dir().to_path_buf();
+            for sub in ["plugins", "plugin-data", "logs/plugins", "cache", "icons", "wallpaper"] {
                 std::fs::create_dir_all(dir.join(sub))?;
             }
-            let settings = Settings::load(&dir);
+            let mut settings = Settings::load(&dir);
+            {
+                // 开机自启以系统里的真实状态为准（用户可能在系统设置里关掉了）
+                use tauri_plugin_autostart::ManagerExt;
+                if let Ok(on) = handle.autolaunch().is_enabled() {
+                    settings.autostart = on;
+                }
+            }
             LANG_EN.store(settings.language == "en", Ordering::Relaxed);
 
             let tray = TrayIconBuilder::with_id("main")
@@ -143,9 +312,17 @@ fn main() {
                 })
                 .build(app)?;
 
+            apply_window_style(&handle, &settings);
             app.manage(AppState { settings: Mutex::new(settings), tray });
-            app.manage(plugins::init(dir, handle.package_info().version.to_string()));
+            let ps = plugins::init(dir.clone(), handle.package_info().version.to_string());
+            let (ui_plugins, installed) = ps.home_seed();
+            app.manage(ps);
+            app.manage(home::init(dir, &ui_plugins, &installed));
             plugins::start_all(&handle);
+            // 主窗口默认隐藏（配置里 visible: false），不是开机自启才显示
+            if !std::env::args().any(|a| a == "--autostart") {
+                show_main(&handle);
+            }
             Ok(())
         })
         .on_window_event(|window, event| match event {
@@ -174,6 +351,19 @@ fn main() {
             plugins::plugin_devtools,
             plugins::plugin_call,
             plugins::plugin_heartbeat,
+            wallpaper_pick,
+            home::home_list,
+            home::home_add_url,
+            home::home_add_paths,
+            home::home_pick_files,
+            home::home_add_plugin,
+            home::home_update,
+            home::home_remove,
+            home::home_reorder,
+            home::home_launch,
+            home::home_pick_target,
+            home::home_pick_image,
+            home::home_refetch_icon,
         ])
         .build(tauri::generate_context!())
         .expect("启动失败");

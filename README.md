@@ -21,7 +21,7 @@
 
 ## 数据位置
 
-- Windows：`%LOCALAPPDATA%\com.privatevoidyou.slackingdesk\`
+- Windows：安装目录下的 `data\`（例如 `D:\software\Slacking Desk\data\`）。如果装在写不进去的位置（比如 Program Files），就用 `%LOCALAPPDATA%\com.privatevoidyou.slackingdesk\`。卸载时勾选"删除应用数据"才会删掉。
 - macOS：`~/Library/Application Support/com.privatevoidyou.slackingdesk/`
 
 插件日志在数据目录的 `logs/plugins/` 里。各平台的行为差异见 [docs/platform.md](docs/platform.md)。

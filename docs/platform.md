@@ -8,7 +8,7 @@ Linux 在 v1 只保证壳本身和纯网页插件可用。
 
 | 系统 | 位置 |
 |---|---|
-| Windows | `%LOCALAPPDATA%\com.privatevoidyou.slackingdesk\` |
+| Windows | 安装目录下的 `data\`；写不进去时用 `%LOCALAPPDATA%\com.privatevoidyou.slackingdesk\` |
 | macOS | `~/Library/Application Support/com.privatevoidyou.slackingdesk/` |
 | Linux | `~/.local/share/com.privatevoidyou.slackingdesk/` |
 

@@ -4,7 +4,7 @@ import { useT } from "../i18n";
 
 export type Page = "home" | "plugins" | "settings";
 
-export default function Sidebar(props: { page: Page; onChange: (p: Page) => void; platform: Platform }) {
+export default function Sidebar(props: { page: Page; onChange: (p: Page) => void; platform: Platform; version: string }) {
   const t = useT();
   const items = [
     { id: "home" as const, icon: House, label: t("nav.home") },
@@ -29,7 +29,7 @@ export default function Sidebar(props: { page: Page; onChange: (p: Page) => void
           {label}
         </button>
       ))}
-      <div className="side-foot">v0.1.0 · {t("side.preview")}</div>
+      <div className="side-foot">v{props.version} · {t("side.preview")}</div>
     </aside>
   );
 }
