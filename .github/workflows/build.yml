@@ -1,0 +1,68 @@
+name: build
+
+on:
+  push:
+    branches: [main, "m*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: ""
+            bundle: src-tauri/target/release/bundle
+          - os: macos-latest
+            args: "--target universal-apple-darwin"
+            bundle: src-tauri/target/universal-apple-darwin/release/bundle
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # 图标只提交了 SVG 源文件，其余尺寸在这里生成
+      - run: npx tauri icon src-tauri/icons/icon.svg -o src-tauri/icons
+
+      - name: tauri build
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tauri build ${{ matrix.args }} 2>&1 | tee build.log
+
+      # 把编译错误写成 annotation：公开仓库不登录也能看到
+      - name: report errors
+        if: failure()
+        shell: bash
+        run: |
+          [ -f build.log ] || exit 0
+          msg=$(grep -E -A6 "^error|^\s*Error|error\[" build.log | head -n 120)
+          [ -z "$msg" ] && msg=$(tail -n 80 build.log)
+          msg="${msg//'%'/'%25'}"; msg="${msg//$'\r'/}"; msg="${msg//$'\n'/'%0A'}"
+          echo "::error title=${{ matrix.os }} build failed::$msg"
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: slacking-desk-${{ matrix.os }}
+          path: |
+            ${{ matrix.bundle }}/nsis/*.exe
+            ${{ matrix.bundle }}/msi/*.msi
+            ${{ matrix.bundle }}/dmg/*.dmg
+          if-no-files-found: error
