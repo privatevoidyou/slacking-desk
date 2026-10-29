@@ -1,0 +1,11 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+# 图标由 CI 从 icon.svg 生成（MCP 推送只支持文本文件）
+src-tauri/icons/*
+!src-tauri/icons/icon.svg
+*.log
+*.tsbuildinfo
+# Cargo.lock 暂未入库（单文件超出推送工具上限），CI 会自行解析依赖
+src-tauri/Cargo.lock
