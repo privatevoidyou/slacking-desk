@@ -1,5 +1,9 @@
-import { Clock, Pin, Plus, Search, Sparkles } from "lucide-react";
-import { useT } from "../i18n";
+import { useState } from "react";
+import { Sparkles } from "lucide-react";
+import * as api from "../api";
+import type { PluginView } from "../api";
+import { useLang, useT } from "../i18n";
+import { PluginIcon } from "../components/PluginBits";
 
 function greetingKey() {
   const h = new Date().getHours();
@@ -10,8 +14,18 @@ function greetingKey() {
   return "greet.evening" as const;
 }
 
-export default function Home({ onGoPlugins }: { onGoPlugins: () => void }) {
+/** M1：只显示已启用且有界面的插件。搜索、排序、快捷方式在 M2。 */
+export default function Home({ plugins, onGoPlugins }: { plugins: PluginView[]; onGoPlugins: () => void }) {
   const t = useT();
+  const lang = useLang();
+  const [error, setError] = useState("");
+  const tiles = plugins.filter((p) => p.enabled && p.manifest?.ui && !["invalid", "needsConfirm"].includes(p.problem?.kind ?? ""));
+
+  const open = (id: string) => {
+    setError("");
+    api.pluginOpen(id).catch((e) => setError(String(e)));
+  };
+
   return (
     <>
       <header className="hd">
@@ -19,37 +33,33 @@ export default function Home({ onGoPlugins }: { onGoPlugins: () => void }) {
           <h1>{t(greetingKey())}</h1>
           <p className="sub">{t("home.sub")}</p>
         </div>
-        <div className="tools">
-          <div className="search">
-            <Search size={17} />
-            {t("home.search")}
+      </header>
+      {error && <div className="err top">{error}</div>}
+      {tiles.length === 0 ? (
+        <div className="empty">
+          <div className="empty-ico">
+            <Sparkles size={28} />
           </div>
-          <div className="seg">
-            <b className="on">
-              <Clock size={15} />
-              {t("home.recent")}
-            </b>
-            <b>
-              <Pin size={15} />
-              {t("home.fixed")}
-            </b>
-          </div>
-          <button className="btn pri" disabled>
-            <Plus size={17} />
-            {t("home.add")}
+          <h2>{t("home.emptyTitle")}</h2>
+          <p>{t("home.emptyDesc")}</p>
+          <button className="btn" onClick={onGoPlugins}>
+            {t("home.emptyCta")}
           </button>
         </div>
-      </header>
-      <div className="empty">
-        <div className="empty-ico">
-          <Sparkles size={28} />
+      ) : (
+        <div className="grid">
+          {tiles.map((p) => {
+            const name = api.pluginName(p.manifest, p.id, lang);
+            return (
+              <button key={p.id} className="tile" onClick={() => open(p.id)} title={api.pluginDesc(p.manifest, lang)}>
+                <PluginIcon url={p.iconUrl} name={name} size="l" />
+                <span className="lbl">{name}</span>
+                <span className={p.problem ? "st bad" : "st"}>{p.problem ? t(`chip.${p.problem.kind}`) : p.bgRunning ? t("chip.background") : "\u00a0"}</span>
+              </button>
+            );
+          })}
         </div>
-        <h2>{t("home.emptyTitle")}</h2>
-        <p>{t("home.emptyDesc")}</p>
-        <button className="btn" onClick={onGoPlugins}>
-          {t("home.emptyCta")}
-        </button>
-      </div>
+      )}
     </>
   );
 }

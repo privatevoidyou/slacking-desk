@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react";
-import type { AppInfo, Language, Settings, Theme } from "../api";
+import { openDataDir, type AppInfo, type Language, type Settings, type Theme } from "../api";
 import { useT } from "../i18n";
 
 const themes: { id: Theme; icon: typeof Sun }[] = [
@@ -61,7 +61,12 @@ export default function SettingsPage(props: { info: AppInfo; settings: Settings;
           </div>
           <div className="srow">
             <div className="sl">{t("settings.dataDir")}</div>
-            <div className="sh mono">{props.info.dataDir}</div>
+            <div className="dirrow">
+              <div className="sh mono">{props.info.dataDir}</div>
+              <button className="btn sm" onClick={() => openDataDir().catch((e) => setError(String(e)))}>
+                {t("settings.openDataDir")}
+              </button>
+            </div>
           </div>
         </div>
       </div>

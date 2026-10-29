@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { appInfo, getSettings, saveSettings, type AppInfo, type Settings } from "./api";
+import { listen } from "@tauri-apps/api/event";
+import { appInfo, getSettings, pluginsList, saveSettings, type AppInfo, type PluginView, type Settings } from "./api";
 import { LangContext } from "./i18n";
 import TitleBar from "./components/TitleBar";
 import Sidebar, { type Page } from "./components/Sidebar";
@@ -23,11 +24,17 @@ export default function App() {
   const [info, setInfo] = useState<AppInfo>();
   const [settings, setSettings] = useState<Settings>();
   const [page, setPage] = useState<Page>("home");
+  const [plugins, setPlugins] = useState<PluginView[]>([]);
   const theme = useEffectiveTheme(settings?.theme);
 
   useEffect(() => {
     appInfo().then(setInfo);
     getSettings().then(setSettings);
+    // 插件状态（启停、崩溃、窗口开关）变化时由 Rust 通知
+    const refresh = () => pluginsList().then(setPlugins);
+    refresh();
+    const off = listen("plugins-changed", refresh);
+    return () => void off.then((f) => f());
   }, []);
 
   useEffect(() => {
@@ -48,8 +55,8 @@ export default function App() {
         <div className="main">
           <TitleBar platform={info.platform} />
           <section className="content">
-            {page === "home" && <Home onGoPlugins={() => setPage("plugins")} />}
-            {page === "plugins" && <Plugins />}
+            {page === "home" && <Home plugins={plugins} onGoPlugins={() => setPage("plugins")} />}
+            {page === "plugins" && <Plugins plugins={plugins} />}
             {page === "settings" && <SettingsPage info={info} settings={settings} onChange={updateSettings} />}
           </section>
         </div>
