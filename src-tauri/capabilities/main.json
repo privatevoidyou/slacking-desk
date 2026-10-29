@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "壳主窗口的能力。插件窗口不会获得这些能力。",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-minimize",
@@ -23,6 +25,18 @@
     "allow-plugin-remove",
     "allow-plugin-open",
     "allow-plugin-open-log",
-    "allow-plugin-devtools"
+    "allow-plugin-devtools",
+    "allow-wallpaper-pick",
+    "allow-home-list",
+    "allow-home-add-url",
+    "allow-home-add-paths",
+    "allow-home-pick-files",
+    "allow-home-add-plugin",
+    "allow-home-update",
+    "allow-home-remove",
+    "allow-home-reorder",
+    "allow-home-launch",
+    "allow-home-pick-target",
+    "allow-home-pick-image"
   ]
 }

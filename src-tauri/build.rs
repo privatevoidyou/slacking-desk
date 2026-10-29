@@ -6,6 +6,7 @@ fn main() {
         "plugins_list", "plugin_pick_folder", "plugin_add", "plugin_set_enabled", "plugin_reload",
         "plugin_restart", "plugin_remove", "plugin_open", "plugin_open_log", "plugin_devtools",
         "plugin_call", "plugin_heartbeat",
+        "wallpaper_pick", "home_list", "home_add_url", "home_add_paths", "home_pick_files", "home_add_plugin", "home_update", "home_remove", "home_reorder", "home_launch", "home_pick_target", "home_pick_image",
     ];
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(commands)))
         .expect("tauri-build 失败");
