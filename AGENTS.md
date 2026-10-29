@@ -70,9 +70,42 @@ Slacking Desk / 摸鱼工作台：Tauri 2 桌面"壳"，所有功能都是插件
 | 里程碑 | 状态 | 内容 |
 |---|---|---|
 | M1 壳骨架 + 插件运行时 | ✅ 已合并 | 见第 4 节 |
-| M2 首页与设置 | 下一个 | 图标网格、拖拽、自定义图标；网页 / 软件快捷方式（读 exe、lnk、.app 图标）；两种排序（最近使用 / 固定顺序）；主题、开机自启、语言；多个 OpenAI 兼容 LLM 接口（key 存钥匙串）+ 连通性测试；**工作台换壁纸**；**代理设置**三档：跟随系统（默认）/ 不使用 / 自定义 http 或 socks5（M3 的下载和 uv 也走它）；**仿 Windows 搜索的弹出框**：默认快捷键 Alt+Space（可改，不用 Ctrl+Space，会和输入法冲突）或点托盘，在任务栏上方弹出，Mac 用菜单栏图标；搜首页条目、已安装程序（开始菜单 / 商店应用、Mac 的"应用程序"），以及用默认浏览器做网页搜索。**不**做真正嵌进 Win11 任务栏 |
-| M3 安装器与市场 | | 本地 zip / 文件夹、GitHub Release、npm（只下载 tarball，用 integrity 校验，不执行 npm install）；sha256 校验；解压防路径穿越 / 符号链接 / 超大文件；升级、卸载、失败回滚；uv + 每插件独立 venv（Python 下载到壳数据目录，`UV_CACHE_DIR` 等指向数据目录）；pip 不当下载渠道；市场页；索引 **ed25519 签名**（私钥在 market 仓库 Secrets，公钥写进壳，到时教用户生成）；market 仓库加校验索引的 Action（要用户手动提交 workflow 文件）；国内镜像 |
+| M2 首页与设置 | 已实现，待用户验收 | 见下面"M2 已定细节"和"M2 实现要点" |
+| M3 安装器与市场 | | 本地 zip / 文件夹、GitHub Release、npm（只下载 tarball，用 integrity 校验，不执行 npm install）；sha256 校验；解压防路径穿越 / 符号链接 / 超大文件；升级、卸载、失败回滚；uv + 每插件独立 venv（Python 下载到壳数据目录，`UV_CACHE_DIR` 等指向数据目录）；pip 不当下载渠道；市场页；索引 **ed25519 签名**（私钥在 market 仓库 Secrets，公钥写进壳，到时教用户生成）；market 仓库加校验索引的 Action（要用户手动提交 workflow 文件）；国内镜像；**代理设置**三档：跟随系统（默认）/ 不使用 / 自定义 http 或 socks5（下载和 uv 都走它） |
 | 之后 | | 插件**一个一个和用户讨论后再做**，不要一次做一批 |
+
+### M2 已定细节（用户已确认）
+
+范围：首页 + 部分设置，一次验收。
+
+- **首页网格**：仿 iTab，图标居中、间距宽松、名字一行省略；只有 1×1 普通图标（数据里预留 `group`、`size`，以后做分组和 2×2 / 4×2 小组件）。数据存 `home.json`：`type / name / target / args / icon / lastUsed / order` 等。首次运行 M2 时把已启用插件迁移到首页。
+- 末尾"+"格：添加网址 / 添加本地程序或文件 / 添加插件（已安装但不在首页的）；也可以把文件（可多个）拖到首页添加。插件安装时自动上首页、卸载时移除；纯后台插件不上首页；插件崩溃 / 无响应时图标显示红点。从首页移除 ≠ 卸载。
+- **快捷方式**：能运行的（exe、lnk、bat、cmd、ps1；Mac 的 .app / .command / .sh）、网址（没写协议自动补 https://）、其他文件 / 文件夹用系统默认方式打开；可填参数；工作目录 = 文件所在文件夹。Windows 用 ShellExecute，Mac 用 `open`。bat / cmd 默认显示控制台，每个快捷方式可选"隐藏"；Windows 可选"以管理员身份运行"（插件图标没有）。目标不存在：图标变灰 + "找不到文件" + 可重新选择。
+- **图标**：exe / lnk / .app 自动提取成 png，缓存在数据目录 `icons/`；其他用首字母 + 可选颜色；也可自定义图片。
+- **右键菜单**：去掉所有 WebView 默认菜单（主窗口和插件窗口），空白处右键什么都不弹；输入框保留复制粘贴。图标右键：打开 / 编辑（名字、图标、参数、隐藏控制台、管理员）/ 从首页移除。正式版屏蔽 Ctrl+R、F5、Ctrl+P、Ctrl+F、F12（开发版保留）。图片不可拖拽。
+- **排序**：固定顺序（可拖动）/ 最近使用（只统计从首页启动的次数，此模式下不能拖）。
+- **壁纸**（壳的设置功能，不是插件，暂不开放插件 API）：无（默认）或本地图片（jpg / png / webp，≤30MB，不支持 gif），复制到数据目录；铺满 / 完整显示；模糊、变暗滑块；作用于整个主窗口。不做"使用桌面壁纸"。
+- **界面风格：标准 / 毛玻璃**（和壁纸分开）：有壁纸时 → 半透明磨砂面板盖在壁纸上；没壁纸时 → Win11 Mica / Acrylic、Mac vibrancy（Tauri window effects），Win10 / Linux → 纯色（用户定："默认的话改成纯色"，没壁纸时一律不用渐变）。风险：自定义标题栏 + 阴影和窗口效果的兼容、两种主题下的文字对比度。
+- **设置分组**：外观（主题、界面风格、壁纸）/ 通用（语言、开机自启）/ 关于（版本、数据目录）。
+- **开机自启**：默认关；开机启动时只待在托盘（`--autostart` 参数，tauri-plugin-autostart：Windows HKCU Run、Mac 登录项）；卸载程序要删掉 Run 键。
+- **测试**：界面在 Linux 沙箱测；图标提取、bat、管理员、自启、Win11 毛玻璃要用户实测（写进清单）。
+
+### M2 实现要点
+
+- `home.rs`：`home.json` 读写、迁移（没有 home.json 时把已启用、有界面的插件加进来）、文件损坏时备份成 `home.json.bak` 再重建、保存时清理 `icons/` 里没人用的图片；`home_*` 命令；插件安装 / 移除时由 `plugins.rs` 调 `on_plugin_installed / on_plugin_removed`。
+- `platform.rs`：`launch`（Win ShellExecuteExW，`runas` 管理员、`SW_HIDE` 隐藏控制台，ps1 用 `powershell -ExecutionPolicy Bypass -File`；Mac `open`，.sh 用终端打开；Linux 直接执行或 xdg-open）、`extract_icon`（Win IShellItemImageFactory 128px；Mac plutil + sips 读 .app 图标；Linux 不提取）、`glass_supported`（Win build ≥ 22000、Mac 是、Linux 否）。
+- 壁纸和自定义图标通过 `appfile` 协议给主窗口读（只允许 `icons/`、`wallpaper/`），插件窗口用不了。
+- 右键 / 快捷键屏蔽：主窗口和 host.html 用 `src/guard.ts`；插件自己的 HTML 由 `plugins.rs` 的 `inject_guard` 注入同样的脚本（插件作者不用管）。
+- 窗口默认 `visible: false`，启动时没带 `--autostart` 才显示；毛玻璃且没壁纸且系统支持时才开 Mica / vibrancy（`apply_window_style`）。
+- 拖动排序用 pointer 事件自己实现（没用 HTML5 拖放，Tauri 的文件拖入会和它冲突）。
+
+### 记下但暂时不做
+
+- 仿 Windows 搜索的弹出框（默认 Alt+Space，不用 Ctrl+Space，会和输入法冲突；在任务栏上方弹出，Mac 用菜单栏图标；搜首页条目、已安装程序、默认浏览器网页搜索；**不**真正嵌进 Win11 任务栏）。
+- LLM 接口配置：以后做，形式是 提供商 ID、名称、API 地址（BaseURL）、协议、API Key（存钥匙串）、模型列表 + 连通性测试。
+- 小组件（天气 / 日历 / 待办）：两种可能路线——数据模板渲染 / 叠加 WebView，到时再定；网格已预留 2×2、4×2。
+- 图标分组、大时钟、图标大小选项（"不急"）。
+- 插件接口原则：**等第一个真实插件需要时再实现**，文档里不写规划表。
 
 用户首发最想要的插件：写作 / 阅读、无边框小窗、窗口托盘、闹钟、看电视壁纸、窗口透明度，以及以后的各种点子。老板键不是主角。原始需求里还有：快捷键大全、老板键、窗口录制脚本。已知决定：
 
@@ -92,7 +125,9 @@ Slacking Desk / 摸鱼工作台：Tauri 2 桌面"壳"，所有功能都是插件
 4. `Xvfb :99 -screen 0 1600x1000x24 &`，然后 `DISPLAY=:99 src-tauri/target/debug/slacking-desk`。
 5. `tests/selftest` 启动约 10 秒后会把结果写进 `plugin-data/test.selftest/storage.json` 的 `results`。预期：`info`、`storageSetGet`、`backendEcho` 成功（`unknownApi` 为 `not_found`）；`backendFail` 为 `internal`；`backendMissing`、`unknownApi` 为 `not_found`；`tauri` 为 `undefined/undefined`；`parentDoc`、`localStorage`、`fetchIpc*`、`fetchNoCors`、`img` 都报错；`fetchOther` 为 403；`fetchOwn` 为 `test.selftest`。
 6. 截图用 `import -window root x.png`，点击用 `xdotool mousemove X Y click 1`。没有窗口管理器时 `xdotool windowquit` 关不掉窗口，要用 python-xlib 发 `WM_DELETE_WINDOW`。关进程用 `pkill -x slacking-desk`（`pkill -f` 会把自己的 shell 也杀掉）。
-7. `tests/bad-*` 的预期结果见各插件界面上的文字，以及 market 仓库 `docs/plugin-guide.md` 第 8 节。
+7. Xvfb 里 WebKit 渲染会滞后，截图前先动一下鼠标再等 1～2 秒；启动时加 `WEBKIT_DISABLE_COMPOSITING_MODE=1` 更稳。文件选择对话框没法自动化，测壁纸时直接把图片复制到数据目录 `wallpaper/`，再改 `settings.json` 的 `wallpaper` 字段。
+8. Windows 交叉检查需要 `llvm-rc`（装 llvm），否则 `cargo check --target x86_64-pc-windows-msvc` 会在 build script 报错。
+9. `tests/bad-*` 的预期结果见各插件界面上的文字，以及 market 仓库 `docs/plugin-guide.md` 第 8 节。
 
 ## 8. 已知限制 / 待办
 
