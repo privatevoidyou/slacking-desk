@@ -1,0 +1,35 @@
+/*
+ * Slacking Desk 插件基础样式（/__sdk__/slacking.css），和壳的界面保持一致，自动跟随浅色 / 深色。
+ * 只提供变量和少量基础样式，插件可以随意覆盖。
+ */
+:root {
+  --sd-text: #2c2c2b; --sd-text2: #6f6c67; --sd-bg: #ffffff; --sd-soft: #f9f8f7; --sd-s2: #f0efed;
+  --sd-border: #e6e5e3; --sd-accent: #2783de; --sd-accent-soft: #e5f2fc; --sd-green: #3e8f63;
+  --sd-orange: #b9692a; --sd-red: #c9483d; --sd-radius: 8px;
+  font-family: "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+  font-size: 15px; line-height: 1.5; color-scheme: light;
+}
+[data-theme="dark"] {
+  --sd-text: #ffffff; --sd-text2: rgba(255, 255, 255, 0.65); --sd-bg: #191919; --sd-soft: #202020; --sd-s2: #2a2a29;
+  --sd-border: rgba(255, 255, 255, 0.12); --sd-accent: #5e9fe8; --sd-accent-soft: rgba(94, 159, 232, 0.14);
+  --sd-green: #72bc8f; --sd-orange: #de9255; --sd-red: #e97366; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--sd-text); background: var(--sd-bg); }
+h1, h2, h3 { margin: 0 0 8px; font-weight: 650; }
+.sd-muted { color: var(--sd-text2); }
+.sd-card { background: var(--sd-soft); border: 1px solid var(--sd-border); border-radius: 12px; padding: 16px; }
+button, .sd-btn {
+  font: inherit; height: 34px; padding: 0 14px; border-radius: var(--sd-radius); cursor: default;
+  border: 1px solid var(--sd-border); background: var(--sd-bg); color: var(--sd-text);
+}
+button:hover { background: var(--sd-s2); }
+button.sd-primary { background: var(--sd-accent); border-color: var(--sd-accent); color: #fff; }
+button.sd-primary:hover { filter: brightness(1.05); }
+button:disabled { opacity: 0.5; }
+input, textarea, select {
+  font: inherit; color: var(--sd-text); background: var(--sd-soft); border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius); padding: 6px 10px;
+}
+input:focus, textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--sd-accent); outline-offset: 1px; }
+code, pre { font-family: "Cascadia Mono", "SF Mono", Consolas, monospace; font-size: 13px; }

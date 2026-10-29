@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "plugin-host",
+  "description": "插件窗口（宿主页）只能转发插件 API 调用和回应心跳。插件身份由 Rust 按窗口 label 判断。",
+  "windows": ["ui:*", "bg:*"],
+  "permissions": ["allow-plugin-call", "allow-plugin-heartbeat"]
+}
