@@ -37,6 +37,7 @@
     "allow-home-reorder",
     "allow-home-launch",
     "allow-home-pick-target",
-    "allow-home-pick-image"
+    "allow-home-pick-image",
+    "allow-home-refetch-icon"
   ]
 }

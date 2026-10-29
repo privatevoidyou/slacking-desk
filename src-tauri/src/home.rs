@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::{platform, plugins, tr};
+use crate::{platform, plugins, siteicon, tr};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -247,8 +247,44 @@ pub async fn home_add_url(app: AppHandle, name: String, url: String) -> Result<(
     let mut it = plugin_item("");
     it.kind = "url".into();
     it.name = name;
-    it.target = url;
-    push(&app, vec![it])
+    it.target = url.clone();
+    let id = it.id.clone();
+    push(&app, vec![it])?;
+    // 图标在后台取，取到后刷新首页
+    tauri::async_runtime::spawn_blocking(move || fetch_site_icon(&app, &id, &url));
+    Ok(())
+}
+
+/// 取网站图标，存到 icons/ 并更新这一项。返回有没有取到。
+fn fetch_site_icon(app: &AppHandle, id: &str, url: &str) -> bool {
+    let Some((bytes, ext)) = siteicon::fetch(url) else { return false };
+    let s = state(app);
+    let mut items = s.items.lock().unwrap();
+    // 取图标期间网址可能被改掉或删掉了
+    let Some(it) = items.iter_mut().find(|i| i.id == id && i.target == url) else { return false };
+    let file = format!("site-{}.{ext}", new_id());
+    let _ = std::fs::create_dir_all(s.icons_dir());
+    if std::fs::write(s.icons_dir().join(&file), bytes).is_err() {
+        return false;
+    }
+    it.auto_icon = Some(file);
+    let ok = s.save(&mut items).is_ok();
+    drop(items);
+    changed(app);
+    ok
+}
+
+/// 编辑框里的"重新获取网站图标"
+#[tauri::command]
+pub async fn home_refetch_icon(app: AppHandle, id: String) -> Result<(), String> {
+    let url = state(&app).items.lock().unwrap().iter().find(|i| i.id == id && i.kind == "url").map(|i| i.target.clone());
+    let url = url.ok_or_else(|| tr("找不到这个图标", "Item not found"))?;
+    let ok = tauri::async_runtime::spawn_blocking(move || fetch_site_icon(&app, &id, &url)).await.unwrap_or(false);
+    if ok {
+        Ok(())
+    } else {
+        Err(tr("没取到这个网站的图标（可能打不开或者没有图标）", "Couldn't get an icon from this website"))
+    }
 }
 
 fn file_item(s: &Home, path: &Path) -> Item {
@@ -325,7 +361,14 @@ pub async fn home_update(app: AppHandle, edit: ItemEdit) -> Result<(), String> {
         _ => old.target.clone(),
     };
     // 换了位置就重新提取图标（在锁外面做，提取可能要一会儿）
-    let auto_icon = if old.kind == "file" && target != old.target { extract_icon(s, Path::new(&target)) } else { old.auto_icon.clone() };
+    let auto_icon = if old.kind == "file" && target != old.target {
+        extract_icon(s, Path::new(&target))
+    } else if old.kind == "url" && target != old.target {
+        None
+    } else {
+        old.auto_icon.clone()
+    };
+    let refetch = (old.kind == "url" && target != old.target).then(|| target.clone());
     let mut items = s.items.lock().unwrap();
     let it = items.iter_mut().find(|i| i.id == edit.id).ok_or_else(|| tr("找不到这个图标", "Item not found"))?;
     it.name = edit.name.trim().to_string();
@@ -343,6 +386,10 @@ pub async fn home_update(app: AppHandle, edit: ItemEdit) -> Result<(), String> {
     s.save(&mut items)?;
     drop(items);
     changed(&app);
+    if let Some(url) = refetch {
+        let id = edit.id;
+        tauri::async_runtime::spawn_blocking(move || fetch_site_icon(&app, &id, &url));
+    }
     Ok(())
 }
 

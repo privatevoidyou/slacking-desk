@@ -7,7 +7,8 @@
 Slacking Desk / 摸鱼工作台：Tauri 2 桌面"壳"，所有功能都是插件。主要用户在中国大陆，主平台 Windows，其次 macOS，Linux 只保证壳本身和纯网页插件。用户是冷彻时光（GitHub `privatevoidyou`），定位"自己先用 + B 站个人开发者"，人设偏"摸鱼带师"。
 
 - 仓库：`privatevoidyou/slacking-desk`（只放壳），`privatevoidyou/slacking-desk-market`（索引 + **所有插件** + 模板 + 插件文档）。都公开，MIT。
-- bundle id：`com.privatevoidyou.slackingdesk`（定了不能改，决定数据目录）。
+- bundle id：`com.privatevoidyou.slackingdesk`（定了不能改，决定 macOS / Linux 的数据目录）。
+- **数据目录**（用户定）：Windows 放安装目录下的 `data\`（`main.rs` 的 `windows_data_dir`，写不进去才退回 `%LOCALAPPDATA%\<id>`；0.2.0 及以前在 `%LOCALAPPDATA%` 的数据第一次启动时自动搬过来）；WebView2 缓存用 `WEBVIEW2_USER_DATA_FOLDER` 也放进去；卸载时勾"删除应用数据"才删（`src-tauri/windows/hooks.nsh`）。macOS / Linux 用系统默认位置。代码里一律用 `data_dir()`，不要用 `app_local_data_dir()`。开发时（`tauri dev`）Windows 数据在 `target\debug\data\`。
 
 ## 2. 和用户协作的硬规则（用户明确要求，必须遵守）
 
@@ -61,7 +62,7 @@ Slacking Desk / 摸鱼工作台：Tauri 2 桌面"壳"，所有功能都是插件
 
 - 视觉：样稿风格已确认（简洁、大圆角卡片、蓝色主色、浅色 / 深色 / 跟随系统）。纯 CSS，没用 Tailwind / shadcn。首页问候语是"摸鱼带师"口吻。
 - 首页：插件和网页 / 软件快捷方式**混在一个网格里**；图标下方保留一行插件自己显示的状态小字（以后的 `home.setStatus`）。首次启动首页为空，不预装插件，不主动联网。
-- 网页快捷方式不自动抓 favicon（会联网），用首字母图标，可自定义。
+- 网页快捷方式：添加时去这个网站取它自己的图标（`siteicon.rs`：apple-touch-icon > 最大的 icon > /favicon.ico，只请求这一个网站），取不到用首字母；编辑框可"重新获取网站图标"。（M2 验收时用户改的，原来是不抓。）以后取不到的多了，再考虑自己整理热门网站图标库。
 - 内置插件可以禁用也可以卸载。
 - 插件 SDK 命名：JS 全局对象 `slacking`；Python 是 `slacking_plugin.py`（零依赖）。
 
@@ -84,8 +85,8 @@ Slacking Desk / 摸鱼工作台：Tauri 2 桌面"壳"，所有功能都是插件
 - **图标**：exe / lnk / .app 自动提取成 png，缓存在数据目录 `icons/`；其他用首字母 + 可选颜色；也可自定义图片。
 - **右键菜单**：去掉所有 WebView 默认菜单（主窗口和插件窗口），空白处右键什么都不弹；输入框保留复制粘贴。图标右键：打开 / 编辑（名字、图标、参数、隐藏控制台、管理员）/ 从首页移除。正式版屏蔽 Ctrl+R、F5、Ctrl+P、Ctrl+F、F12（开发版保留）。图片不可拖拽。
 - **排序**：固定顺序（可拖动）/ 最近使用（只统计从首页启动的次数，此模式下不能拖）。
-- **壁纸**（壳的设置功能，不是插件，暂不开放插件 API）：无（默认）或本地图片（jpg / png / webp，≤30MB，不支持 gif），复制到数据目录；铺满 / 完整显示；模糊、变暗滑块；作用于整个主窗口。不做"使用桌面壁纸"。
-- **界面风格：标准 / 毛玻璃**（和壁纸分开）：有壁纸时 → 半透明磨砂面板盖在壁纸上；没壁纸时 → Win11 Mica / Acrylic、Mac vibrancy（Tauri window effects），Win10 / Linux → 纯色（用户定："默认的话改成纯色"，没壁纸时一律不用渐变）。风险：自定义标题栏 + 阴影和窗口效果的兼容、两种主题下的文字对比度。
+- **壁纸**（壳的设置功能，不是插件，暂不开放插件 API）：无（默认）或本地图片（jpg / png / webp，≤30MB，不支持 gif），复制到数据目录；铺满 / 完整显示；模糊、透明度滑块（透明度是壁纸本身变淡，透出纯色底；原来的"变暗"用户要求去掉）；作用于整个主窗口。不做"使用桌面壁纸"。
+- **界面风格：标准 / 毛玻璃**（和壁纸分开）：有壁纸时 → 侧栏、标题栏、主区域都不盖底，直接露出壁纸，只有卡片（设置分组、插件列表 / 详情、对话框、菜单）有底色：标准 = 卡片接近不透明，毛玻璃 = 卡片半透明磨砂；直接写在壁纸上的文字加阴影（M2 验收时用户定）；没壁纸时 → Win11 Mica / Acrylic、Mac vibrancy（Tauri window effects），Win10 / Linux → 纯色（用户定："默认的话改成纯色"，没壁纸时一律不用渐变）。风险：自定义标题栏 + 阴影和窗口效果的兼容、两种主题下的文字对比度。
 - **设置分组**：外观（主题、界面风格、壁纸）/ 通用（语言、开机自启）/ 关于（版本、数据目录）。
 - **开机自启**：默认关；开机启动时只待在托盘（`--autostart` 参数，tauri-plugin-autostart：Windows HKCU Run、Mac 登录项）；卸载程序要删掉 Run 键。
 - **测试**：界面在 Linux 沙箱测；图标提取、bat、管理员、自启、Win11 毛玻璃要用户实测（写进清单）。
@@ -134,4 +135,6 @@ Slacking Desk / 摸鱼工作台：Tauri 2 桌面"壳"，所有功能都是插件
 - binary 和 node 两种后端没有示例插件，没实测。
 - "插件界面死循环不影响主窗口"在 Linux 上实测过，M1 由用户验收通过；macOS 上的表现以朋友的测试反馈为准。
 - 未签名的 macOS 版通知能不能弹出不确定。
+- 首页"+"菜单：用户反馈刚装完时弹出位置不对、之后又正常了，没复现，用户在观察。
+- 网址图标暂时只读环境变量里的代理（`HTTPS_PROXY` 等），不读 Windows 系统代理；M3 做代理设置时一起接上。
 - `Cargo.lock` 未入库；用户本地 clone 后可以补上。
