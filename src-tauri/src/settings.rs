@@ -10,11 +10,35 @@ pub struct Settings {
     pub language: String,
     /// "light"、"dark" 或 "system"
     pub theme: String,
+    /// 界面风格："standard" 或 "glass"
+    pub ui_style: String,
+    /// 壁纸文件名（在数据目录的 wallpaper/ 里），None = 不用壁纸
+    pub wallpaper: Option<String>,
+    /// "cover"（铺满）或 "contain"（完整显示）
+    pub wallpaper_fit: String,
+    /// 模糊 0–40（像素）
+    pub wallpaper_blur: u32,
+    /// 变暗 0–80（百分比）
+    pub wallpaper_dim: u32,
+    /// 首页排序："fixed" 或 "recent"
+    pub home_sort: String,
+    /// 开机自启。真实状态以系统为准，启动时会用系统里的状态覆盖。
+    pub autostart: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { language: "zh-CN".into(), theme: "system".into() }
+        Self {
+            language: "zh-CN".into(),
+            theme: "system".into(),
+            ui_style: "standard".into(),
+            wallpaper: None,
+            wallpaper_fit: "cover".into(),
+            wallpaper_blur: 0,
+            wallpaper_dim: 10,
+            home_sort: "fixed".into(),
+            autostart: false,
+        }
     }
 }
 

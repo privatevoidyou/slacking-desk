@@ -143,6 +143,17 @@ fn grants_cover(r: &Record, m: &Manifest) -> bool {
 }
 
 impl Plugins {
+    /// 给首页初始化用：(已启用且有界面的插件, 所有已安装插件)
+    pub fn home_seed(&self) -> (Vec<String>, Vec<String>) {
+        let list = self.list.lock().unwrap();
+        let ui = list
+            .iter()
+            .filter(|p| p.record.enabled && !p.blocked() && p.manifest.as_ref().is_some_and(|m| m.ui.is_some()))
+            .map(|p| p.record.id.clone())
+            .collect();
+        (ui, list.iter().map(|p| p.record.id.clone()).collect())
+    }
+
     fn save(&self, list: &[Plugin]) -> Result<(), String> {
         let file = InstalledFile { plugins: list.iter().map(|p| p.record.clone()).collect() };
         let text = serde_json::to_string_pretty(&file).expect("序列化不会失败");
@@ -479,9 +490,33 @@ pub fn serve(app: &AppHandle, caller: &str, req: &Request<Vec<u8>>) -> Response<
     };
     let Some((dir, network)) = found else { return not_found(path) };
     match manifest::resolve(&dir, rest).and_then(|f| std::fs::read(&f).map_err(|e| e.to_string())) {
+        Ok(bytes) if mime(rest).starts_with("text/html") => respond(200, mime(rest), inject_guard(bytes), Some(csp(network))),
         Ok(bytes) => respond(200, mime(rest), bytes, Some(csp(network))),
         Err(_) => not_found(rest),
     }
+}
+
+/// 插件页面也去掉浏览器默认右键菜单、屏蔽刷新等快捷键（和主窗口一致）。
+/// 插入到 <head> 后面，不放在 doctype 前面（否则页面会进入怪异模式）。
+fn inject_guard(bytes: Vec<u8>) -> Vec<u8> {
+    let tag = format!("<script>{}</script>", guard_js());
+    let html = String::from_utf8_lossy(&bytes).into_owned();
+    let lower = html.to_ascii_lowercase();
+    let at = ["<head", "<html"]
+        .iter()
+        .find_map(|t| lower.find(t).and_then(|i| lower[i..].find('>').map(|j| i + j + 1)))
+        .unwrap_or(0);
+    let mut out = html;
+    out.insert_str(at, &tag);
+    out.into_bytes()
+}
+
+/// 和前端 src/guard.ts 做的事一样。正式版才屏蔽快捷键，开发版保留方便调试。
+pub fn guard_js() -> String {
+    let block_keys = !cfg!(debug_assertions);
+    format!(
+        r#"(function(){{var k={block_keys};addEventListener("contextmenu",function(e){{var t=e.target;if(!(t&&t.closest&&t.closest("input,textarea,[contenteditable]")))e.preventDefault();}},true);addEventListener("dragstart",function(e){{if(e.target&&e.target.tagName==="IMG")e.preventDefault();}},true);if(k)addEventListener("keydown",function(e){{var c=e.ctrlKey||e.metaKey,x=e.key.toLowerCase();if(e.key==="F5"||e.key==="F12"||e.key==="F3"||(c&&(x==="r"||x==="p"||x==="f"||x==="g"||x==="u"))||(c&&e.shiftKey&&(x==="i"||x==="j"||x==="c")))e.preventDefault();}},true);}})();"#
+    )
 }
 
 fn csp(network: bool) -> String {
@@ -641,6 +676,7 @@ pub async fn plugin_add(app: AppHandle, path: String) -> Result<(), String> {
     let (m, warnings) = manifest::load(Path::new(&path), &s.shell_version).map_err(|e| e.join("\n"))?;
     let id = m.id.clone();
     stop_plugin(&app, &id);
+    let new_ui;
     {
         let mut list = s.list.lock().unwrap();
         let record = Record {
@@ -651,12 +687,24 @@ pub async fn plugin_add(app: AppHandle, path: String) -> Result<(), String> {
             allow_background: m.background.is_some(),
             allow_backend: m.backend.is_some(),
         };
+        let has_ui = m.ui.is_some();
         let p = Plugin { record, manifest: Some(m), warnings, problem: None, backend: None, last_pong: None };
-        match list.iter_mut().find(|x| x.record.id == id) {
-            Some(old) => *old = p,
-            None => list.push(p),
-        }
+        let is_new = match list.iter_mut().find(|x| x.record.id == id) {
+            Some(old) => {
+                *old = p;
+                false
+            }
+            None => {
+                list.push(p);
+                true
+            }
+        };
         s.save(&list)?;
+        new_ui = is_new && has_ui;
+    }
+    // 新装的、有界面的插件自动放到首页；纯后台插件不放
+    if new_ui {
+        crate::home::on_plugin_installed(&app, &id);
     }
     start_background(&app, &id)?;
     changed(&app);
@@ -735,6 +783,7 @@ pub async fn plugin_remove(app: AppHandle, id: String, delete_data: bool) -> Res
             std::fs::remove_dir_all(&dir).map_err(|e| tr(&format!("删除插件数据失败：{e}"), &format!("Failed to delete plugin data: {e}")))?;
         }
     }
+    crate::home::on_plugin_removed(&app, &id);
     changed(&app);
     Ok(())
 }
