@@ -4,6 +4,7 @@
  * 宿主页不判断权限：Rust 按窗口 label 认出插件，再查权限。
  */
 import { invoke } from "@tauri-apps/api/core";
+import "./guard";
 
 interface HostConfig {
   id: string;
